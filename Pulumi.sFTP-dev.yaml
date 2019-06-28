@@ -1,0 +1,4 @@
+encryptionsalt: v1:0AlJlHBNa4U=:v1:WEj6rR0h3dmwVuYV:IMGLHqc/GQIUTYZ7X9QyYzsQTnToJg==
+config:
+  aws:region: us-east-2
+  aws:profile: pulumitargetacct
