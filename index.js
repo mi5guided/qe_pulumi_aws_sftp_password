@@ -24,7 +24,7 @@ async function syncExecution() {
         const {stdout,stderr} = await exec('ssh-keygen -f '+user.keyName);
       }
       // Read key material
-      keyMaterial = fs.readFileSync("./"+user.keyName+".pub", "utf8");
+      user.keyMaterial = fs.readFileSync("./"+user.keyName+".pub", "utf8");
     });
 
     // Define and Deploy sFTP Transfer Service

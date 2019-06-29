@@ -1,0 +1,1 @@
+NOTICE: this directory is hosted on S3 as part of AWS sFTP Transfer Service
