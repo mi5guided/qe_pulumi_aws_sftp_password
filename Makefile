@@ -1,6 +1,9 @@
 
-up: 
+up: lambdacode.zip
 	pulumi up
+
+lambdacode.zip: lambdacode.py
+	zip lambdacode.zip lambdacode.py
 
 down: 
 	pulumi destroy
