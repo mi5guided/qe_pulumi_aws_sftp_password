@@ -14,7 +14,9 @@ const exec = util.promisify(require("child_process").exec);
 // Default program values
 let progConfig = {
   "useCustomUserPool": true,
-  "prefix": "sxfs"
+  "prefix": "sxfs",
+  // value taken from Date.now(), except we need a reproducible suffix
+  "suffix": "-" + (1561806534970 & 0x00FFFF).toString(16)
 };
 async function syncExecution() {
   let keyMaterial;
@@ -38,7 +40,9 @@ async function syncExecution() {
       var userPoolParams = {
         "sftpUserList": sftpUsers,
         "useCustomUserPool": progConfig.useCustomUserPool,
-        "prefix": progConfig.prefix
+        "bucketName": "user-home" + progConfig.suffix,
+        "prefix": progConfig.prefix,
+        "suffix": progConfig.suffix
       };
       awsUserPool.ddStart(userPoolParams);
     }
@@ -47,7 +51,10 @@ async function syncExecution() {
     var sftpParams = {
       "sftpUserList": sftpUsers,
       "useCustomUserPool": progConfig.useCustomUserPool,
-      "prefix": progConfig.prefix
+      "bucketName": "user-home" + progConfig.suffix,
+      "logGroup": "sftp" + progConfig.suffix,
+      "prefix": progConfig.prefix,
+      "suffix": progConfig.suffix
     };
     awsSftp.ddStart(sftpParams);
   } catch (err) {

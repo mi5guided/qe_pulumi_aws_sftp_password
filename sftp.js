@@ -2,14 +2,10 @@
 const aws = require("@pulumi/aws");
 const pulumi = require("@pulumi/pulumi");
 
-// value taken from Date.now(), except we need a reproducible suffix
-const projSuffix = "-" + (1561806534970 & 0x00FFFF).toString(16);
-
 // Default module values
 let modConfig = {
-  "bucketName": "user-home" + projSuffix,
   "sftpUserList": [],
-  "logGroup": "sftp" + projSuffix
+  "logGroup": "sftp"
 };
 let rsrcPulumiSftp = {};
 
@@ -32,6 +28,7 @@ function rsrcPulumiCreate() {
 
   // Create the sFTP service, itself
   rsrcPulumiSftp.sftpLoggingRole = new aws.iam.Role("sftpLoggingRole", {
+    name: "sftpLoggingRole",
     assumeRolePolicy: `{
 	"Version": "2012-10-17",
 	"Statement": [
@@ -48,6 +45,7 @@ function rsrcPulumiCreate() {
   });
 
   rsrcPulumiSftp.sftpLoggingRolePolicy = new aws.iam.RolePolicy("sftpLoggingRolePolicy", {
+    name: "sftpLoggingRolePolicy",
     policy: `{
 	"Version": "2012-10-17",
 	"Statement": [
@@ -76,6 +74,7 @@ function rsrcPulumiCreate() {
 
   // start populating the users
   rsrcPulumiSftp.sftpAccessRole = new aws.iam.Role("sftpAccessRole", {
+    name: "sftpAccessRole",
     assumeRolePolicy: `{
 	"Version": "2012-10-17",
 	"Statement": [
@@ -92,6 +91,7 @@ function rsrcPulumiCreate() {
   });
 
   rsrcPulumiSftp.sftpAccessRolePolicy = new aws.iam.RolePolicy("sftpAccessRolePolicy", {
+    name: "sftpAccessRolePolicy",
     policy: `{
 	"Version": "2012-10-17",
 	"Statement": [

@@ -6,6 +6,7 @@ const sftp = require("./sftp");
 // Default module values
 let modConfig = {
   "sftpUserList": [],
+  "requestTemplate": {},
   "prefix": "dflt"
 };
 let rsrcPulumiUserPool = {};
@@ -18,6 +19,10 @@ function setModuleConfig(parm) {
   valList.forEach((x) => {
     modConfig[x] = parm[x];
   });
+
+  modConfig.requestTemplate["username"] = `"$input.params('username')"`;
+  modConfig.requestTemplate["password"] = `"$util.escapeJavaScript($input.params('Password')).replaceAll("\\'","'")"`;
+  modConfig.requestTemplate["serverId"] = `"$input.params('serverId')"`;
 }
 
 // ****************************************************************************
@@ -27,11 +32,18 @@ function rsrcPulumiCreate() {
   // create each user's entry into AWS Secrets Manager
   modConfig.sftpUserList.forEach((x, i) => {
     rsrcPulumiUserPool[x.name + "_sm"] = new aws.secretsmanager.Secret(x.name + "_sm", {
-      username: "SFTP/" + x.name,
-      password: x.pw,
-      PublicKeys: x.keyMaterial,
-      role: sftp.pulumiResources.sftpAccessRole,
-      homeDirectory: "/" + modConfig.bucketName + "/" + x.name
+      name: "SFTP/" + x.name + "ddd",
+    });
+
+    rsrcPulumiUserPool[x.name + "_smversion"] = new aws.secretsmanager.SecretVersion(x.name + "_smversion", {
+      secretId: rsrcPulumiUserPool[x.name + "_sm"].id,
+      secretString: JSON.stringify({
+        username: x.name,
+        password: x.pw,
+        PublicKeys: x.keyMaterial,
+        role: sftp.pulumiResources.sftpAccessRole,
+        homeDirectory: "/" + modConfig.bucketName + "/" + x.name
+      })
     });
   });
 
@@ -55,6 +67,7 @@ function rsrcPulumiCreate() {
 
   rsrcPulumiUserPool.lambda = new aws.lambda.Function(modConfig.prefix + "LambdaFunc", {
     runtime: aws.lambda.Python3d7Runtime,
+    name: modConfig.prefix + "LambdaFunc",
     code: new pulumi.asset.AssetArchive({
       ".": new pulumi.asset.FileArchive("./lambdacode.zip"),
     }),
@@ -65,35 +78,46 @@ function rsrcPulumiCreate() {
 
   // create API Gateway
   // Create the Swagger spec for a proxy which forwards all HTTP requests through to the Lambda function.
-  function swaggerSpec(lambdaArn) {
-    let swaggerSpec = {
-      swagger: "2.0",
-      info: { title: "api", version: "1.0" },
-      paths: {
-        "/{proxy+}": swaggerRouteHandler(lambdaArn),
-      },
-    };
-    return JSON.stringify(swaggerSpec);
-  }
+  // function swaggerSpec(lambdaArn) {
+  //   let swaggerSpec = {
+  //     swagger: "2.0",
+  //     info: { title: modConfig.prefix + "sFTPAuthAPI", version: "1.0" },
+  //     paths: {
+  //       "/{proxy+}": swaggerRouteHandler(lambdaArn),
+  //     },
+  //   };
+  //   return JSON.stringify(swaggerSpec);
+  // }
 
-  // Create a single Swagger spec route handler for a Lambda function.
-  function swaggerRouteHandler(lambdaArn) {
-    let region = aws.config.requireRegion();
-    return {
-      "x-amazon-apigateway-any-method": {
-        "x-amazon-apigateway-integration": {
-          uri: `arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations`,
-          passthroughBehavior: "when_no_match",
-          httpMethod: "POST",
-          type: "aws_proxy",
-        },
-      },
-    };
-  }
+  // // Create a single Swagger spec route handler for a Lambda function.
+  // function swaggerRouteHandler(lambdaArn) {
+  //   let region = aws.config.requireRegion();
+  //   return {
+  //     "x-amazon-apigateway-any-method": {
+  //       "x-amazon-apigateway-integration": {
+  //         uri: `arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations`,
+  //         passthroughBehavior: "when_no_match",
+  //         httpMethod: "POST",
+  //         type: "aws",
+  //         responses: { "200": { statusCode: "200" } },
+  //         requestTemplates: {
+  //           "application/json":
+  //           `{
+  //             "username": "$input.params('username')",
+  //             "password": "$util.escapeJavaScript($input.params('Password')).replaceAll("\\'","'")",
+  //             "serverId": "$input.params('serverId')"
+  //           }`
+  //         }
+  //       },
+  //     },
+  //   };
+  // }
 
   // Create the API Gateway Rest API, using a swagger spec.
   rsrcPulumiUserPool.apiRestApi = new aws.apigateway.RestApi(modConfig.prefix + "sFTPAuthAPI", {
-    body: rsrcPulumiUserPool.lambda.arn.apply(lambdaArn => swaggerSpec(lambdaArn)),
+    // body: rsrcPulumiUserPool.lambda.arn.apply(lambdaArn => swaggerSpec(lambdaArn)),
+    name: modConfig.prefix + "sFTPAuthAPI",
+    description: "sFTP Transfer Service Custom IDP api"
   });
 
   // Create a deployment of the Rest API.
@@ -101,7 +125,7 @@ function rsrcPulumiCreate() {
     restApi: rsrcPulumiUserPool.apiRestApi,
     // Note: Set to empty to avoid creating an implicit stage, we'll create it explicitly below instead.
     stageName: "",
-  });
+  }, { dependsOn: [rsrcPulumiUserPool.apiMethod] });
 
   // Create a stage, which is an addressable instance of the Rest API. Set it to point at the latest deployment.
   rsrcPulumiUserPool.apiStage = new aws.apigateway.Stage(modConfig.prefix + "sFTPAuthAPIStage", {
@@ -163,6 +187,17 @@ function rsrcPulumiCreate() {
     restApi: rsrcPulumiUserPool.apiRestApi.id,
     name: modConfig.prefix + "sFTPAuthAPIModel",
     schema: `{ "type": "object" }`
+  });
+
+  rsrcPulumiUserPool.apiRestItegration = new aws.apigateway.Integration(modConfig.prefix + "sFTPAuthAPIIntegration", {
+    httpMethod: rsrcPulumiUserPool.apiMethod.httpMethod,
+    integrationHttpMethod: "POST",
+    resourceId: rsrcPulumiUserPool.apiConfigRsrc.id,
+    restApi: rsrcPulumiUserPool.apiRestApi.id,
+    type: "AWS",
+    passthroughBehavior: "WHEN_NO_MATCH",
+    requestTemplates: modConfig.requestTemplate,
+    uri: pulumi.interpolate`arn:aws:apigateway:${aws.region}:lambda:path/2015-03-31/functions/${rsrcPulumiUserPool.lambda.arn}/invocations`,
   });
 }
 
