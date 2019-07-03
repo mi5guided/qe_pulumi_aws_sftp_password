@@ -6,7 +6,8 @@
 
 "use strict";
 const awsSftp = require("./sftp");
-const awsUserPool = require("./userpool.js")
+const awsUserPoolFunc = require("./userpoolfunc.js");
+const awsUserPoolApi = require("./userpoolapi.js");
 const fs = require("fs");
 const util = require("util");
 const exec = util.promisify(require("child_process").exec);
@@ -20,31 +21,36 @@ let progConfig = {
 };
 async function syncExecution() {
   let keyMaterial;
-  const sftpUsers = [
-    { name: "user1", pw: "PW!123abc", keyName: "user1-keypair.pem" },
-    { name: "user2", pw: "PW!123abc", keyName: "user2-keypair.pem" },
-    { name: "user3", pw: "PW!123abc", keyName: "user3-keypair.pem" },
-  ];
+  const sftpUsers = [{ name: "userxyz", pw: "one", keyName: "userxyz-keypair.pem" }];
+
   try {
-    // check to see if we have all the user keys; if not, create them
-    sftpUsers.forEach(async function (user) {
-      if (fs.existsSync("./" + user.keyName + ".pub") === false) {
-        const { stdout, stderr } = await exec('ssh-keygen -f ' + user.keyName);
+    for (let i = 0; i < sftpUsers.length; i++) {
+      // check to see if we have the user keys; if not, create them
+      if (fs.existsSync("./" + sftpUsers[i].keyName + ".pub") === false) {
+        const { stdout, stderr } = await exec('ssh-keygen -f ' + sftpUsers[i].keyName);
       }
       // Read key material
-      user.keyMaterial = fs.readFileSync("./" + user.keyName + ".pub", "utf8");
-    });
+      sftpUsers[i].keyMaterial = fs.readFileSync("./" + sftpUsers[i].keyName + ".pub", "utf8");
+    }
 
     if (progConfig.useCustomUserPool) {
-      // Define and Deploy Custom User Pool
-      var userPoolParams = {
+      // Define and Deploy Custom User Pool Lambda function and dummy user
+      var userPoolFuncParams = {
         "sftpUserList": sftpUsers,
         "useCustomUserPool": progConfig.useCustomUserPool,
         "bucketName": "user-home" + progConfig.suffix,
         "prefix": progConfig.prefix,
         "suffix": progConfig.suffix
       };
-      awsUserPool.ddStart(userPoolParams);
+      awsUserPoolFunc.ddStart(userPoolFuncParams);
+
+      // Define and Deploy Custom User API Gateway
+      var userPoolApiParams = {
+        "bucketName": "user-home" + progConfig.suffix,
+        "prefix": progConfig.prefix,
+        "suffix": progConfig.suffix
+      };
+      //      awsUserPoolApi.ddStart(userPoolApiParams);
     }
 
     // Define and Deploy sFTP Transfer Service
