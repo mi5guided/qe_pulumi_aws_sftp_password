@@ -27,7 +27,7 @@ function setModuleConfig(parm) {
 // Create resources
 // ****************************************************************************
 function rsrcPulumiCreate() {
-  // Create the API Gateway Rest API, using a swagger spec.
+  // Create the API Gateway Rest API
   rsrcPulumiUserPoolApi.apiRestApi = new aws.apigateway.RestApi(modConfig.prefix + "sFTPAuthAPI", {
     // body: rsrcPulumiUserPool.lambda.arn.apply(lambdaArn => swaggerSpec(lambdaArn)),
     name: modConfig.prefix + "sFTPAuthAPI",
@@ -35,6 +35,7 @@ function rsrcPulumiCreate() {
     endpointConfiguration: { types: "REGIONAL" }
   });
 
+  // Path: /servers/{serverId}/users/{username}/config
   // API Resources
   rsrcPulumiUserPoolApi.apiServersRsrc = new aws.apigateway.Resource(modConfig.prefix + "sFTPAuthAPIServersRsrc", {
     parentId: rsrcPulumiUserPoolApi.apiRestApi.rootResourceId,
@@ -67,20 +68,42 @@ function rsrcPulumiCreate() {
   });
 
   // API Methods and Responses
-  rsrcPulumiUserPoolApi.apiMethod = new aws.apigateway.Method(modConfig.prefix + "sFTPAuthAPIMethod", {
-    authorization: "AWS_IAM",
-    httpMethod: "GET",
-    resourceId: rsrcPulumiUserPoolApi.apiConfigRsrc.id,
-    restApi: rsrcPulumiUserPoolApi.apiRestApi.id,
-  });
-
   rsrcPulumiUserPoolApi.apiModel = new aws.apigateway.Model(modConfig.prefix + "sFTPAuthAPIModel", {
     contentType: "application/json",
     description: "a JSON schema",
     restApi: rsrcPulumiUserPoolApi.apiRestApi.id,
     name: modConfig.prefix + "sFTPAuthAPIModel",
-    schema: `{ "type": "object" }`
+    schema: `{
+      "title": "UserUserConfig",
+      "type": "object",
+      "properties": {
+        "HomeDirectory": {
+          "type": "string"
+        },
+        "Role": {
+          "type": "string"
+        },
+        "Policy": {
+          "type": "string"
+        },
+        "PublicKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }`
   });
+
+  rsrcPulumiUserPoolApi.apiMethod = new aws.apigateway.Method(modConfig.prefix + "sFTPAuthAPIMethod", {
+    apiKeyRequired: false,
+    authorization: "AWS_IAM",
+    httpMethod: "GET",
+    requestModels: { "application/json": rsrcPulumiUserPoolApi.apiModel.name },
+    resourceId: rsrcPulumiUserPoolApi.apiConfigRsrc.id,
+    restApi: rsrcPulumiUserPoolApi.apiRestApi.id,
+  }), { dependsOn: [rsrcPulumiUserPoolApi.apiModel] };
 
   rsrcPulumiUserPoolApi.apiRestItegration = new aws.apigateway.Integration(modConfig.prefix + "sFTPAuthAPIIntegration", {
     httpMethod: rsrcPulumiUserPoolApi.apiMethod.httpMethod,
@@ -90,7 +113,24 @@ function rsrcPulumiCreate() {
     type: "AWS",
     passthroughBehavior: "WHEN_NO_MATCH",
     requestTemplates: modConfig.requestTemplate,
-    uri: pulumi.interpolate `arn:aws:apigateway:${aws.region}:lambda:path/2015-03-31/functions/${rsrcPulumiUserPoolApi.lambda.arn}/invocations`,
+    uri: pulumi.interpolate`arn:aws:apigateway:${aws.region}:lambda:path/2015-03-31/functions/${awsUserPoolFunc.pulumiResources.lambda.arn}/invocations`,
+  });
+
+  rsrcPulumiUserPoolApi.apiIntegrationResponse = new aws.apigateway.IntegrationResponse(modConfig.prefix + "sFTPAuthAPIIntegrationResponse", {
+    httpMethod: rsrcPulumiUserPoolApi.apiMethod.httpMethod,
+    resourceId: rsrcPulumiUserPoolApi.apiConfigRsrc.id,
+    restApi: rsrcPulumiUserPoolApi.apiRestApi.id,
+    statusCode: "200"
+  }, { dependsOn: [rsrcPulumiUserPoolApi.apiMethod] });
+
+  // rsrcPulumiUserPoolApi.apiResponse = new aws.apigateway.Response(modConfig.prefix + "sFTPAuthAPIResponse", {
+  // });
+
+  rsrcPulumiUserPoolApi.apiMethodResponse = new aws.apigateway.MethodResponse("200", {
+    httpMethod: rsrcPulumiUserPoolApi.apiMethod.httpMethod,
+    resourceId: rsrcPulumiUserPoolApi.apiConfigRsrc.id,
+    restApi: rsrcPulumiUserPoolApi.apiRestApi.id,
+    statusCode: "200"
   });
 
   // Create a deployment of the Rest API.
@@ -106,7 +146,7 @@ function rsrcPulumiCreate() {
     deployment: rsrcPulumiUserPoolApi.apiDeployment,
     httpMethod: "*",
     resourcePath: "/*",
-    stageName: "api-dev",
+    stageName: "Prod",
   });
 
   // Give permissions from API Gateway to invoke the Lambda
@@ -114,7 +154,7 @@ function rsrcPulumiCreate() {
     action: "lambda:invokeFunction",
     function: awsUserPoolFunc.pulumiResources.lambda,
     principal: "apigateway.amazonaws.com",
-    sourceArn: pulumi.interpolate `${rsrcPulumiUserPoolApi.apiDeployment.executionArn}*/*`,
+    sourceArn: pulumi.interpolate`${rsrcPulumiUserPoolApi.apiDeployment.executionArn}*/*`,
   });
 }
 

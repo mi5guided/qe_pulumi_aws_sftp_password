@@ -1,7 +1,6 @@
 // ****************************************************************************
 // Main Entry Point for this Pulumi Project
-//   Segemented out 2 modules: Networking and EC2 instance.
-//   Looking into the promise of better modules
+//   Segemented out 3 modules: sFTP service, Lambda Definition, and API Gateway
 // ****************************************************************************
 
 "use strict";
@@ -50,7 +49,7 @@ async function syncExecution() {
         "prefix": progConfig.prefix,
         "suffix": progConfig.suffix
       };
-      //      awsUserPoolApi.ddStart(userPoolApiParams);
+      awsUserPoolApi.ddStart(userPoolApiParams);
     }
 
     // Define and Deploy sFTP Transfer Service
