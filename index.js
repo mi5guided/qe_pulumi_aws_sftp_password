@@ -7,6 +7,7 @@
 const awsSftp = require("./sftp");
 const awsUserPoolFunc = require("./userpoolfunc.js");
 const awsUserPoolApi = require("./userpoolapi.js");
+const simpleApi = require("./simpleapi");
 const fs = require("fs");
 const util = require("util");
 const exec = util.promisify(require("child_process").exec);
@@ -41,7 +42,7 @@ async function syncExecution() {
         "prefix": progConfig.prefix,
         "suffix": progConfig.suffix
       };
-      awsUserPoolFunc.ddStart(userPoolFuncParams);
+      // awsUserPoolFunc.ddStart(userPoolFuncParams);
 
       // Define and Deploy Custom User API Gateway
       var userPoolApiParams = {
@@ -49,7 +50,8 @@ async function syncExecution() {
         "prefix": progConfig.prefix,
         "suffix": progConfig.suffix
       };
-      awsUserPoolApi.ddStart(userPoolApiParams);
+      simpleApi.ddStart(userPoolApiParams);
+      // awsUserPoolApi.ddStart(userPoolApiParams);
     }
 
     // Define and Deploy sFTP Transfer Service
@@ -61,7 +63,7 @@ async function syncExecution() {
       "prefix": progConfig.prefix,
       "suffix": progConfig.suffix
     };
-    awsSftp.ddStart(sftpParams);
+    // awsSftp.ddStart(sftpParams);
   } catch (err) {
     console.error(err);
   }
