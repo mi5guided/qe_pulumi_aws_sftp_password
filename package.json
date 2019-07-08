@@ -2,8 +2,12 @@
     "name": "aws-javascript",
     "main": "index.js",
     "dependencies": {
-        "@pulumi/pulumi": "latest",
         "@pulumi/aws": "latest",
-        "@pulumi/awsx": "latest"
+        "@pulumi/awsx": "latest",
+        "@pulumi/pulumi": "latest",
+        "eslint": "^6.0.1"
+    },
+    "devDependencies": {
+        "xo": "^0.24.0"
     }
 }

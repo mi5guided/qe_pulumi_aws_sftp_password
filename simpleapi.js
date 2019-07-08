@@ -5,6 +5,7 @@ const pulumi = require("@pulumi/pulumi");
 // Default module values
 let modConfig = {
   "requestTemplate": {},
+  "prefix": "prefix"
 };
 let rsrcPulumiSimpleApi = {};
 
@@ -17,6 +18,8 @@ function setModuleConfig(parm) {
     modConfig[x] = parm[x];
   });
 
+  modConfig.region = new pulumi.Config("aws").require("region");
+
   // **** NEED TO FIX THIS GARBAGE
   // modConfig.requestTemplate["username"] = `"$input.params('Username')"`;
   // modConfig.requestTemplate["password"] = `"$input.params('Password')"`;
@@ -27,9 +30,37 @@ function setModuleConfig(parm) {
 // Create resources
 // ****************************************************************************
 function rsrcPulumiCreate() {
+  // Create the Lambda function first
+  rsrcPulumiSimpleApi.lambdaRole = new aws.iam.Role(modConfig.prefix + "LambdaRole", {
+    name: modConfig.prefix + "LambdaRole",
+    assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({ Service: "lambda.amazonaws.com" }),
+  });
+
+  rsrcPulumiSimpleApi.lambdaRolePolicy = new aws.iam.RolePolicy(modConfig.prefix + "LambdaRolePolicy", {
+    role: rsrcPulumiSimpleApi.lambdaRole.id,
+    policy: pulumi.output({
+      Version: "2012-10-17",
+      Statement: [{
+        Action: ["logs:*", "cloudwatch:*"],
+        Resource: "*",
+        Effect: "Allow",
+      }],
+    }),
+  });
+
+  rsrcPulumiSimpleApi.lambda = new aws.lambda.Function(modConfig.prefix + "LambdaFunc", {
+    runtime: aws.lambda.NodeJS10dXRuntime,
+    name: modConfig.prefix + "LambdaFunc",
+    code: new pulumi.asset.AssetArchive({
+      ".": new pulumi.asset.FileArchive("./simplelambda.zip"),
+    }),
+    timeout: 300,
+    handler: "simplelambda.handler",
+    role: rsrcPulumiSimpleApi.lambdaRole.arn
+  }, { dependsOn: [rsrcPulumiSimpleApi.lambdaRolePolicy] });
+
   // Create the API Gateway Rest API
   rsrcPulumiSimpleApi.apiRestApi = new aws.apigateway.RestApi(modConfig.prefix + "sFTPAuthAPI", {
-    // body: rsrcPulumiUserPool.lambda.arn.apply(lambdaArn => swaggerSpec(lambdaArn)),
     name: modConfig.prefix + "sFTPAuthAPI",
     description: "sFTP Transfer Service Custom IDP api",
     endpointConfiguration: { types: "REGIONAL" }
@@ -86,15 +117,15 @@ function rsrcPulumiCreate() {
     type: "AWS",
     passthroughBehavior: "WHEN_NO_MATCH",
     requestTemplates: modConfig.requestTemplate,
-    uri: pulumi.interpolate`arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-2:416768527988:function:simpleFunc/invocations`,
-  });
+    uri: pulumi.interpolate`arn:aws:apigateway:${modConfig.region}:lambda:path/2015-03-31/functions/${rsrcPulumiSimpleApi.lambda.arn}/invocations`,
+  }, { dependsOn: [rsrcPulumiSimpleApi.lambda] });
 
   rsrcPulumiSimpleApi.apiIntegrationResponse = new aws.apigateway.IntegrationResponse(modConfig.prefix + "sFTPAuthAPIIntegrationResponse", {
     httpMethod: rsrcPulumiSimpleApi.apiMethod.httpMethod,
     resourceId: rsrcPulumiSimpleApi.apiLogin.id,
     restApi: rsrcPulumiSimpleApi.apiRestApi.id,
     statusCode: "200"
-  }, { dependsOn: [rsrcPulumiSimpleApi.apiMethod] });
+  }, { dependsOn: [rsrcPulumiSimpleApi.apiRestItegration] });
 }
 
 // ****************************************************************************
@@ -102,13 +133,9 @@ function rsrcPulumiCreate() {
 // ****************************************************************************
 function postDeploy() {
   // pulumi.all([
-  //   rsrcPulumiUserPool.sftpServer.id,
-  //   rsrcPulumiUserPool.homeBucket.id,
-  //   rsrcPulumiUserPool.sftpServer.endpoint
-  // ]).apply(([x, y, z]) => {
-  //   console.log("sftp Info:", x);
-  //   console.log("s3 bucket Info:", y);
-  //   console.log("sftp Endpt:", z);
+  //   rsrcPulumiSimpleApi.lambda.arn
+  // ]).apply(([x]) => {
+  //   console.log("Lambda arn:", x);
   // });
 }
 

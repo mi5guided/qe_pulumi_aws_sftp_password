@@ -1,9 +1,12 @@
 
-up: lambdacode.zip
+up: lambdacode.zip simplelambda.zip
 	pulumi up
 
 lambdacode.zip: lambdacode.py
 	zip lambdacode.zip lambdacode.py
+
+simplelambda.zip: simplelambda.js
+	zip simplelambda.zip simplelambda.js
 
 down: 
 	pulumi destroy
