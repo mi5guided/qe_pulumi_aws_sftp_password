@@ -68,14 +68,15 @@ function rsrcPulumiCreate() {
 
   rsrcPulumiSimpleApi.apiLogin = new aws.apigateway.Resource(modConfig.prefix + "sFTPAuthAPILogin", {
     parentId: rsrcPulumiSimpleApi.apiRestApi.rootResourceId,
-    pathPart: "login",
+    pathPart: "iface",
     restApi: rsrcPulumiSimpleApi.apiRestApi.id,
   });
 
   rsrcPulumiSimpleApi.apiMethod = new aws.apigateway.Method(modConfig.prefix + "sFTPAuthAPIMethod", {
     apiKeyRequired: false,
-    authorization: "AWS_IAM",
+    authorization: "NONE",
     httpMethod: "GET",
+    requestParameters: {},
     requestModels: { "application/json": modConfig.prefix + "sFTPAuthAPIModel" },
     resourceId: rsrcPulumiSimpleApi.apiLogin.id,
     restApi: rsrcPulumiSimpleApi.apiRestApi.id,
@@ -109,7 +110,7 @@ function rsrcPulumiCreate() {
     }`
   });
 
-  rsrcPulumiSimpleApi.apiRestItegration = new aws.apigateway.Integration(modConfig.prefix + "sFTPAuthAPIIntegration", {
+  rsrcPulumiSimpleApi.apiRestIntegration = new aws.apigateway.Integration(modConfig.prefix + "sFTPAuthAPIIntegration", {
     httpMethod: rsrcPulumiSimpleApi.apiMethod.httpMethod,
     integrationHttpMethod: "POST",
     resourceId: rsrcPulumiSimpleApi.apiLogin.id,
@@ -120,12 +121,40 @@ function rsrcPulumiCreate() {
     uri: pulumi.interpolate`arn:aws:apigateway:${modConfig.region}:lambda:path/2015-03-31/functions/${rsrcPulumiSimpleApi.lambda.arn}/invocations`,
   }, { dependsOn: [rsrcPulumiSimpleApi.lambda] });
 
+  rsrcPulumiSimpleApi.apiDeployment = new aws.apigateway.Deployment(modConfig.prefix + "sFTPAuthAPIDeployment", {
+    restApi: rsrcPulumiSimpleApi.apiRestApi,
+    // Note: Set to empty to avoid creating an implicit stage, we'll create it explicitly below instead.
+    stageName: "",
+  }, { dependsOn: [rsrcPulumiSimpleApi.apiMethod] });
+
+  rsrcPulumiSimpleApi.apiStage = new aws.apigateway.Stage(modConfig.prefix + "sFTPAuthAPIStage", {
+    restApi: rsrcPulumiSimpleApi.apiRestApi,
+    deployment: rsrcPulumiSimpleApi.apiDeployment,
+    httpMethod: "*",
+    resourcePath: "/*",
+    stageName: "Prod",
+  });
+
+  rsrcPulumiSimpleApi.apiRestLambdaPermission = new aws.lambda.Permission(modConfig.prefix + "sFTPAuthLambdaPermission", {
+    action: "lambda:invokeFunction",
+    function: rsrcPulumiSimpleApi.lambda,
+    principal: "apigateway.amazonaws.com",
+    sourceArn: pulumi.interpolate `${rsrcPulumiSimpleApi.apiDeployment.executionArn}*/*`
+  }, { dependsOn: [rsrcPulumiSimpleApi.apiDeployment] });
+
   rsrcPulumiSimpleApi.apiIntegrationResponse = new aws.apigateway.IntegrationResponse(modConfig.prefix + "sFTPAuthAPIIntegrationResponse", {
     httpMethod: rsrcPulumiSimpleApi.apiMethod.httpMethod,
     resourceId: rsrcPulumiSimpleApi.apiLogin.id,
     restApi: rsrcPulumiSimpleApi.apiRestApi.id,
     statusCode: "200"
-  }, { dependsOn: [rsrcPulumiSimpleApi.apiRestItegration] });
+  }, { dependsOn: [rsrcPulumiSimpleApi.apiRestIntegration] });
+
+  rsrcPulumiSimpleApi.apiMethodResponse = new aws.apigateway.MethodResponse("200", {
+    httpMethod: rsrcPulumiSimpleApi.apiMethod.httpMethod,
+    resourceId: rsrcPulumiSimpleApi.apiLogin.id,
+    restApi: rsrcPulumiSimpleApi.apiRestApi.id,
+    statusCode: "200"
+  });
 }
 
 // ****************************************************************************
