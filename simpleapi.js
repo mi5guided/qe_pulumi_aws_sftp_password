@@ -68,7 +68,7 @@ function rsrcPulumiCreate() {
 
   rsrcPulumiSimpleApi.apiLogin = new aws.apigateway.Resource(modConfig.prefix + "sFTPAuthAPILogin", {
     parentId: rsrcPulumiSimpleApi.apiRestApi.rootResourceId,
-    pathPart: "iface",
+    pathPart: "iface4",
     restApi: rsrcPulumiSimpleApi.apiRestApi.id,
   });
 
@@ -125,7 +125,7 @@ function rsrcPulumiCreate() {
     restApi: rsrcPulumiSimpleApi.apiRestApi,
     // Note: Set to empty to avoid creating an implicit stage, we'll create it explicitly below instead.
     stageName: "",
-  }, { dependsOn: [rsrcPulumiSimpleApi.apiMethod] });
+  }, { dependsOn: [rsrcPulumiSimpleApi.apiMethod, rsrcPulumiSimpleApi.apiRestIntegration] });
 
   rsrcPulumiSimpleApi.apiStage = new aws.apigateway.Stage(modConfig.prefix + "sFTPAuthAPIStage", {
     restApi: rsrcPulumiSimpleApi.apiRestApi,
@@ -133,7 +133,7 @@ function rsrcPulumiCreate() {
     httpMethod: "*",
     resourcePath: "/*",
     stageName: "Prod",
-  });
+  }, { dependsOn: [rsrcPulumiSimpleApi.apiDeployment] });
 
   rsrcPulumiSimpleApi.apiRestLambdaPermission = new aws.lambda.Permission(modConfig.prefix + "sFTPAuthLambdaPermission", {
     action: "lambda:invokeFunction",
